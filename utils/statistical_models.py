@@ -31,7 +31,7 @@ def forecast_evaluation(h:int,y_true:np.array, y_pred:np.array) -> Dict[str, flo
     
     metrics['MSE'] = np.round(mean_squared_error(y_true, y_pred), 5)
     metrics['RMSE'] = np.round(np.sqrt(metrics['MSE']), 5)
-    metrics['RMSPE'] = np.round(np.sqrt(np.mean(np.square(((y_true - y_pred) / y_true)), axis=0)), 5)[0]
+    #metrics['RMSPE'] = np.round(np.sqrt(np.mean(np.square(((y_true - y_pred) / y_true)), axis=0)), 5)
     metrics['MAE'] = np.round(mean_absolute_error(y_true, y_pred), 5)
     metrics['MAPE'] = np.round(np.mean(np.abs((y_true - y_pred) / y_true)) * 100, 5)
     metrics['SMAPE'] = np.round(smape(y_true, y_pred), 5)
@@ -54,8 +54,8 @@ class ArimaModel():
     def cross_validate(self, 
                        ARIMA_configs:product, 
                        h:int=1,
-                       step:int=25,
-                       window_size:int=None,
+                       stride:int=25,
+                       window_length:int=None,
                        eval_metric:Literal['smape', 'mean_squared_error', 'mean_absolute_error']='mean_squared_error') -> None:
         """
         Cross validate the ARIMA model with the given configurations.
@@ -65,37 +65,40 @@ class ArimaModel():
             The configurations to cross validate.
         h : int, optional
             The forecast horizon, by default 1
-        step : int, optional
-            The step size between folds, by default 25
+        stride : int, optional
+            The stride size between folds, by default 25
+        window_length : int, optional
+            The window size for sliding window cross validation, by default None
         eval_metric : Literal['smape', 'mean_squared_error', 'mean_absolute_error'], optional
             The metric to use for evaluation, by default 'mean_squared_error'
         """
 
-        self.cross_val_results = defaultdict()
+        if not self.cross_validated:
+            self.cross_val_results = defaultdict()
 
-        for conf in tqdm.tqdm(ARIMA_configs):
-            # ARIMA model
-            model = pm.ARIMA(order=conf,
-                            suppress_warnings=True,
-                            **self.additional_params)
-            
-            # Cross-validation objects
-            cv_rolling = pm.model_selection.RollingForecastCV(h=h, step=step)
-            cv_sliding = pm.model_selection.SlidingWindowForecastCV(h=h, step=step, window_size=window_size)
+            for conf in tqdm.tqdm(ARIMA_configs):
+                # ARIMA model
+                model = pm.ARIMA(order=conf,
+                                suppress_warnings=True,
+                                **self.additional_params)
+                
+                # Cross-validation objects
+                cv_rolling = pm.model_selection.RollingForecastCV(h=h, step=stride)
+                cv_sliding = pm.model_selection.SlidingWindowForecastCV(h=h, step=stride, window_size=window_length)
 
-            # Fit the model
-            model_rolling_scores = pm.model_selection.cross_val_score(model, self.train, cv=cv_rolling, scoring=eval_metric)
-            model_sliding_scores = pm.model_selection.cross_val_score(model, self.train, cv=cv_sliding, scoring=eval_metric)
+                # Fit the model
+                model_rolling_scores = pm.model_selection.cross_val_score(model, self.train, cv=cv_rolling, scoring=eval_metric)
+                model_sliding_scores = pm.model_selection.cross_val_score(model, self.train, cv=cv_sliding, scoring=eval_metric)
 
-            self.cross_val_results[conf] = {'rolling': np.median(model_rolling_scores), 
-                                            'sliding': np.median(model_sliding_scores)}
-            
-        self.cross_validation_df =pd.DataFrame.from_dict(self.cross_val_results, orient='index').reset_index()\
-            .rename(columns={'level_0': 'AR_order',
-                            'level_1': 'I_order',
-                            'level_2': 'MA_order',
-                            'rolling': 'rolling_median_MSE',
-                            'sliding': 'sliding_median_MSE'})
+                self.cross_val_results[conf] = {'rolling': np.median(model_rolling_scores), 
+                                                'sliding': np.median(model_sliding_scores)}
+                
+            self.cross_validation_df =pd.DataFrame.from_dict(self.cross_val_results, orient='index').reset_index()\
+                .rename(columns={'level_0': 'AR_order',
+                                'level_1': 'I_order',
+                                'level_2': 'MA_order',
+                                'rolling': 'rolling_median_MSE',
+                                'sliding': 'sliding_median_MSE'})
         
         self.cross_validated = True
 
@@ -185,6 +188,18 @@ class ArimaModel():
 
             self.predictions['iterative'] = np.array(forecasts)
 
+        # if strategy == 'iterative' or strategy == 'all':
+        #     model_copy = cp.deepcopy(self.model)
+        #     forecasts = []
+        #     forecasts.append(self.model.predict(n_periods=h, return_conf_int=True)[0][-1])
+        #     for i in range(len(self.test)):
+        #         model_copy.update([self.test[i]], maxiter=0)
+        #         model_copy.arima_res_.params = self.model.params()
+        #         new_forecast = model_copy.predict(n_periods=h, return_conf_int=True)[0]
+        #         forecasts.append(new_forecast[-1])
+
+        #     self.predictions['iterative'] = np.array(forecasts[h-1:])
+
         if strategy == 'iterative_with_update' or strategy == 'all':
             model_copy = cp.deepcopy(self.model)
             forecasts = []
@@ -237,8 +252,8 @@ class EtsModel:
     def cross_validate(self, 
                        ETS_configs:List[dict], 
                        h:int=1,
-                       step:int=25,
-                       window_size:int=None,
+                       stride:int=25,
+                       window_length:int=None,
                        eval_metric:Literal['smape', 'mean_squared_error', 'mean_absolute_error']='mean_squared_error') -> None:
         """
         Cross validate the ETS model with the given configurations.
@@ -248,8 +263,10 @@ class EtsModel:
             The configurations to cross validate.
         h : int, optional
             The forecast horizon, by default 1
-        step : int, optional
-            The step size between folds, by default 25
+        stride : int, optional
+            The stride size between folds, by default 25
+        window_length : int, optional
+            The window size for sliding window cross validation, by default None
         eval_metric : Literal['smape', 'mean_squared_error', 'mean_absolute_error'], optional
             The metric to use for evaluation, by default 'mean_squared_error'
         """
@@ -264,8 +281,8 @@ class EtsModel:
             squared_error_rolling = []
             squared_error_sliding = []
 
-            cv_sliding = pm.model_selection.SlidingWindowForecastCV(h=h, step=step, window_size=window_size)
-            cv_rolling = pm.model_selection.RollingForecastCV(h=h, step=step)
+            cv_sliding = pm.model_selection.SlidingWindowForecastCV(h=h, step=stride, window_size=window_length)
+            cv_rolling = pm.model_selection.RollingForecastCV(h=h, step=stride)
 
             for train_index, val_index in cv_rolling.split(self.train):
                 train_, val_ = self.train[train_index], self.train[val_index]

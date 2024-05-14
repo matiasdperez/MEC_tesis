@@ -895,6 +895,7 @@ class Seq2SeqLSTM():
                                                     return_state=True)(input_train)
             encoder_last_h1 = BatchNormalization(momentum=0.6)(encoder_last_h1)
             encoder_last_c = BatchNormalization(momentum=0.6)(encoder_last_c)
+            decoder = RepeatVector(output_train.shape[1])(encoder_last_h1)
             decoder = LSTM(units = hp_layer_1_dim, 
                             activation = hp_activation, 
                             dropout = hp_drop_out_rate, 

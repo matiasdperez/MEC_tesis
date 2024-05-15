@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from typing import Literal, Optional, Dict 
 from collections import defaultdict
+from scipy.special import j0
 from tqdm import tqdm
 import os
 from utils.statistical_models import forecast_evaluation
@@ -10,6 +11,7 @@ from utils.statistical_models import forecast_evaluation
 import tensorflow as tf
 import tensorflow_addons as tfa
 
+from keras.utils import set_random_seed
 from keras.models import Sequential, Model, load_model
 from keras.layers import LSTM, Dense, RepeatVector, TimeDistributed, Input, BatchNormalization, Dropout
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
@@ -240,7 +242,7 @@ class LSTMnetwork():
 
         return self.model
 
-    def fit(self, DGP:str, epochs:int = 100, callbacks:Literal['EarlyStopping', 'ModelCheckpoint', 'ReduceLROnPlateau','all'] = 'all' ,**kwarg):
+    def fit(self, DGP:str, epochs:int = 100, callbacks:Literal['EarlyStopping', 'ModelCheckpoint', 'ReduceLROnPlateau','all'] = 'all', verbose:int=1, **kwarg):
 
         """
         Fit the model to the training data. It'll use the best model found during the cross validation process.
@@ -260,7 +262,6 @@ class LSTMnetwork():
 
         ES_min_delta = kwarg.get('ES_min_delta', 1e-3)
         ES_patience = kwarg.get('ES_patience', 10)
-        verbose = kwarg.get('verbose', 1)
         RLROP_factor = kwarg.get('RLROP_factor', 0.1)
         RLROP_patience = kwarg.get('RLROP_patience', 5)
 
@@ -298,7 +299,7 @@ class LSTMnetwork():
 
         self.fitted = True
 
-    def predict(self, strategy:Literal['one_shot', 'iterative','all']='all') -> defaultdict:
+    def predict(self, n_runs:int, strategy:Literal['one_shot', 'iterative','all']='all') -> defaultdict:
 
         """
         Forecast the test data using the best model found during the cross validation process.
@@ -314,7 +315,7 @@ class LSTMnetwork():
         self.predictions = defaultdict()
 
         if strategy == 'one_shot' or strategy == 'all':
-            
+            # To do: implement several runs with one_shot strategy
             previous_timesteps = self.train_[-self.seq_length:]
             forecasts = []
 
@@ -327,17 +328,28 @@ class LSTMnetwork():
             self.predictions['one_shot'] = forecasts
 
         if strategy == 'iterative' or strategy == 'all':
+
+            forecast_runs = []
+
+            for run in range(n_runs):
             
-            previous_timesteps = self.train_[-self.seq_length:]
-            forecasts = []
+                previous_timesteps = self.train_[-self.seq_length:]
+                forecasts = []
 
-            for i in tqdm(range(len(self.test)-self.h+1), desc='Forecasting using iterative strategy:'):
-                forecast = self.model.predict(previous_timesteps.reshape(1, self.seq_length, 1), verbose=0)[0][0]
-                forecasts.append(forecast)
-                previous_timesteps = np.append(previous_timesteps, self.test[i])[-self.seq_length:]
+                for i in tqdm(range(len(self.test)-self.h+1), desc='Forecasting using iterative strategy:'):
+                    forecast = self.model.predict(previous_timesteps.reshape(1, self.seq_length, 1), verbose=0)[0][0]
+                    forecasts.append(forecast)
+                    previous_timesteps = np.append(previous_timesteps, self.test[i])[-self.seq_length:]
 
-            forecasts = np.array(forecasts).reshape(-1,1)
-            self.predictions['iterative'] = forecasts
+                forecasts = np.array(forecasts).reshape(-1,1)
+                forecast_runs.append(forecasts)
+
+                self.fitted = False
+                
+                set_random_seed(run)
+                self.fit(DGP = 'run_{}'.format(run+1), verbose=0)
+
+            self.predictions['iterative'] = np.mean(forecast_runs, axis=0)
                 
         self.forecasted = True
 
@@ -616,7 +628,7 @@ class PeepholedLSTMnetwork():
 
         return self.model
 
-    def fit(self, DGP:str, epochs:int = 100, callbacks:Literal['EarlyStopping', 'ModelCheckpoint', 'ReduceLROnPlateau','all'] = 'all' ,**kwarg):
+    def fit(self, DGP:str, epochs:int = 100, callbacks:Literal['EarlyStopping', 'ModelCheckpoint', 'ReduceLROnPlateau','all'] = 'all', verbose:int=1, **kwarg):
 
         """
         Fit the model to the training data. It'll use the best model found during the cross validation process.
@@ -636,7 +648,6 @@ class PeepholedLSTMnetwork():
 
         ES_min_delta = kwarg.get('ES_min_delta', 1e-3)
         ES_patience = kwarg.get('ES_patience', 10)
-        verbose = kwarg.get('verbose', 1)
         RLROP_factor = kwarg.get('RLROP_factor', 0.1)
         RLROP_patience = kwarg.get('RLROP_patience', 5)
 
@@ -674,7 +685,7 @@ class PeepholedLSTMnetwork():
 
         self.fitted = True
 
-    def predict(self, strategy:Literal['one_shot', 'iterative','all']='all') -> defaultdict:
+    def predict(self, n_runs:int, strategy:Literal['one_shot', 'iterative','all']='all') -> defaultdict:
 
         """
         Forecast the test data using the best model found during the cross validation process.
@@ -703,17 +714,28 @@ class PeepholedLSTMnetwork():
             self.predictions['one_shot'] = forecasts
 
         if strategy == 'iterative' or strategy == 'all':
+
+            forecast_runs = []
+
+            for run in range(n_runs):
             
-            previous_timesteps = self.train_[-self.seq_length:]
-            forecasts = []
+              previous_timesteps = self.train_[-self.seq_length:]
+              forecasts = []
 
-            for i in tqdm(range(len(self.test)-self.h+1), desc='Forecasting using iterative strategy:'):
-                forecast = self.model.predict(previous_timesteps.reshape(1, self.seq_length, 1), verbose=0)[0][0]
-                forecasts.append(forecast)
-                previous_timesteps = np.append(previous_timesteps, self.test[i])[-self.seq_length:]
+              for i in tqdm(range(len(self.test)-self.h+1), desc='Forecasting using iterative strategy:'):
+                  forecast = self.model.predict(previous_timesteps.reshape(1, self.seq_length, 1), verbose=0)[0][0]
+                  forecasts.append(forecast)
+                  previous_timesteps = np.append(previous_timesteps, self.test[i])[-self.seq_length:]
 
-            forecasts = np.array(forecasts).reshape(-1,1)
-            self.predictions['iterative'] = forecasts
+              forecasts = np.array(forecasts).reshape(-1,1)
+              forecast_runs.append(forecasts)
+
+              self.fitted = False
+
+              set_random_seed(run)
+              self.fit(DGP = 'run_{}'.format(run+1), verbose=0)
+
+            self.predictions['iterative'] = np.mean(forecast_runs, axis=0)
                 
         self.forecasted = True
 
@@ -975,6 +997,7 @@ class Seq2SeqLSTM():
     def fit(self, DGP:str, 
             epochs:int = 100, 
             callbacks:Literal['EarlyStopping', 'ModelCheckpoint', 'ReduceLROnPlateau','all'] = 'all',
+            verbose:int=1,
             **kwarg):
         
         """
@@ -995,7 +1018,6 @@ class Seq2SeqLSTM():
 
         ES_min_delta = kwarg.get('ES_min_delta', 1e-3)
         ES_patience = kwarg.get('ES_patience', 10)
-        verbose = kwarg.get('verbose', 1)
         RLROP_factor = kwarg.get('RLROP_factor', 0.1)
         RLROP_patience = kwarg.get('RLROP_patience', 5)
 
@@ -1036,7 +1058,7 @@ class Seq2SeqLSTM():
 
         self.fitted = True
 
-    def predict(self, strategy:Literal['one_shot', 'iterative','all']='all') -> defaultdict:
+    def predict(self, n_runs:int, strategy:Literal['one_shot', 'iterative','all']='all') -> defaultdict:
 
         """
         Forecast the test data using the best model found during the cross validation process.
@@ -1065,17 +1087,28 @@ class Seq2SeqLSTM():
             self.predictions['one_shot'] = forecasts
 
         if strategy == 'iterative' or strategy == 'all':
+
+            forecast_runs = []
+
+            for run in range(n_runs):
             
-            previous_timesteps = self.train_[-self.seq_length:]
-            forecasts = []
+              previous_timesteps = self.train_[-self.seq_length:]
+              forecasts = []
 
-            for i in tqdm(range(len(self.test)-self.h+1), desc='Forecasting using iterative strategy:'):
-                forecast = self.model.predict(previous_timesteps.reshape(1, self.seq_length, 1), verbose=0)[0][self.h-1][0]
-                forecasts.append(forecast)
-                previous_timesteps = np.append(previous_timesteps, self.test[i])[-self.seq_length:]
+              for i in tqdm(range(len(self.test)-self.h+1), desc='Forecasting using iterative strategy:'):
+                  forecast = self.model.predict(previous_timesteps.reshape(1, self.seq_length, 1), verbose=0)[0][self.h-1][0]
+                  forecasts.append(forecast)
+                  previous_timesteps = np.append(previous_timesteps, self.test[i])[-self.seq_length:]
 
-            forecasts = np.array(forecasts).reshape(-1,1)
-            self.predictions['iterative'] = forecasts
+              forecasts = np.array(forecasts).reshape(-1,1)
+              forecast_runs.append(forecasts)
+
+              self.fitted = False
+
+              set_random_seed(run)
+              self.fit(DGP = 'run_{}'.format(run+1), verbose=0)
+
+            self.predictions['iterative'] = np.mean(forecast_runs, axis=0)
                 
         self.forecasted = True
 

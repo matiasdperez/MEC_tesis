@@ -390,7 +390,7 @@ class EtsModel:
                 new_model = ETSModel(np.r_[self.train,self.test[:i]], 
                     **self._config, **self.additional_params)
                 with new_model.fix_params(best_model_params):
-                    print(new_model.fit(disp=False).summary())
+                    #print(new_model.fit(disp=False).summary())
                     new_forecast = new_model.fit(disp=False).forecast(steps=h)[-1]
                 forecasts.append(new_forecast)
 

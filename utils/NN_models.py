@@ -299,7 +299,7 @@ class LSTMnetwork():
 
         self.fitted = True
 
-    def predict(self, n_runs:int, strategy:Literal['one_shot', 'iterative','all']='all') -> defaultdict:
+    def predict(self, n_runs:int, strategy:Literal['one_shot', 'iterative','all']='all', **kwarg) -> defaultdict:
 
         """
         Forecast the test data using the best model found during the cross validation process.
@@ -347,13 +347,14 @@ class LSTMnetwork():
                 self.fitted = False
                 
                 set_random_seed(run)
-                self.fit(DGP = 'run_{}'.format(run+1), verbose=0)
+                dgp = kwarg.get('dgp', {})
+                self.fit(DGP = '{}_run_{}'.format(dgp, run+1), verbose=0)
 
             self.predictions['iterative'] = np.mean(forecast_runs, axis=0)
                 
         self.forecasted = True
 
-    def evaluate_forecast(self) -> Dict[str, Dict[str, float]]:
+    def evaluate_forecast(self, h:int) -> Dict[str, Dict[str, float]]:
         """
         Evaluate the forecast using different metrics.
         Parameters
@@ -685,7 +686,7 @@ class PeepholedLSTMnetwork():
 
         self.fitted = True
 
-    def predict(self, n_runs:int, strategy:Literal['one_shot', 'iterative','all']='all') -> defaultdict:
+    def predict(self, n_runs:int, strategy:Literal['one_shot', 'iterative','all']='all', **kwarg) -> defaultdict:
 
         """
         Forecast the test data using the best model found during the cross validation process.
@@ -733,13 +734,15 @@ class PeepholedLSTMnetwork():
               self.fitted = False
 
               set_random_seed(run)
-              self.fit(DGP = 'run_{}'.format(run+1), verbose=0)
+
+              dgp = kwarg.get('dgp', {})
+              self.fit(DGP = '{}_run_{}'.format(dgp, run+1), verbose=0)
 
             self.predictions['iterative'] = np.mean(forecast_runs, axis=0)
                 
         self.forecasted = True
 
-    def evaluate_forecast(self) -> Dict[str, Dict[str, float]]:
+    def evaluate_forecast(self, h:int) -> Dict[str, Dict[str, float]]:
         """
         Evaluate the forecast using different metrics.
         Parameters
@@ -1058,7 +1061,7 @@ class Seq2SeqLSTM():
 
         self.fitted = True
 
-    def predict(self, n_runs:int, strategy:Literal['one_shot', 'iterative','all']='all') -> defaultdict:
+    def predict(self, n_runs:int, strategy:Literal['one_shot', 'iterative','all']='all', **kwarg) -> defaultdict:
 
         """
         Forecast the test data using the best model found during the cross validation process.
@@ -1106,13 +1109,15 @@ class Seq2SeqLSTM():
               self.fitted = False
 
               set_random_seed(run)
-              self.fit(DGP = 'run_{}'.format(run+1), verbose=0)
+
+              dgp = kwarg.get('dgp', {})
+              self.fit(DGP = '{}_run_{}'.format(dgp, run+1), verbose=0)
 
             self.predictions['iterative'] = np.mean(forecast_runs, axis=0)
                 
         self.forecasted = True
 
-    def evaluate_forecast(self) -> Dict[str, Dict[str, float]]:
+    def evaluate_forecast(self, h:int) -> Dict[str, Dict[str, float]]:
 
         """
         Evaluate the forecast using different metrics.

@@ -224,11 +224,12 @@ class ARIMA(Simulator):
         constant = kwargs.get('constant', 0)
         trend = kwargs.get('trend', 0)
         sigma_y = kwargs.get('sigma_y', 1)
+        initial_t = kwargs.get('initial_t', 1)
 
         if distribution == 'Gaussian':
             elf = np.random.normal(size=self.n_steps, loc=0, scale=sigma_y) # iid errors
             if self.I_order == 0:
-                    for i in tqdm(range(1, self.n_steps), initial=1, desc='Simulating'):
+                    for i in tqdm(range(initial_t, self.n_steps), initial=1, desc='Simulating'):
                         burnin_period = max(self.AR_order, self.MA_order)
                         if i < burnin_period: # burn-in period, used to generate initial values of the series
                             if len(initial_values) > 0:
@@ -238,7 +239,7 @@ class ARIMA(Simulator):
                         else:
                             y[i] = constant + trend*i + y[i-self.AR_order:i].T@self.AR_params[::-1] + elf[i-self.MA_order:i+1].T@np.r_[self.MA_params[::-1], 1]
             elif self.I_order <= 2:
-                for i in tqdm(range(1, self.n_steps), initial=1, desc='Simulating'):
+                for i in tqdm(range(initial_t, self.n_steps), initial=1, desc='Simulating'):
                     burnin_period = max(self.AR_order, self.MA_order) + self.I_order
                     if i < burnin_period-1:
                         if len(initial_values) > 0:
@@ -334,7 +335,7 @@ class ARIMA(Simulator):
             burnin_period = max(self.new_AR_order, self.new_MA_order) + self.new_I_order
             initial_values = self.y[t_switch-burnin_period:t_switch]
             
-            self.x, self.new_y, self.new_delta_y = self._simulate('Gaussian', initial_values, burnin=False)
+            self.x, self.new_y, self.new_delta_y = self._simulate('Gaussian', initial_values, burnin=False, **kwargs)
             self.y[t_switch:] = self.new_y[burnin_period+1:self.n_steps-t_switch+burnin_period+1]
             length_delta_y = len(self.delta_y)
             self.delta_y[t_switch:] = self.new_delta_y[burnin_period+1:length_delta_y-t_switch+burnin_period+1]

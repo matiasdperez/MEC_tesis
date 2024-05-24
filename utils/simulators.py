@@ -560,16 +560,17 @@ class MarkovSwitchingModel(Simulator):
         else:
             raise ValueError('Only Gaussian distribution is supported.')
         
-
-    def plot(self):
+        
+    def plot(self, split_index:Optional[int]=0):
         """
         Plot the simulated time series and the state sequence.
         """
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5))
-        sns.lineplot(x = self.x, y = self.y, label = 'y', ax=ax1, lw=0.3)
-        ax1.set_xlabel('Time')
-        sns.lineplot(x = self.x, y = self.state, label = 'state', ax=ax2, color='red', lw=0.3)
-        ax2.set_xlabel('Time')
+        fig, axs = plt.subplots(2, 1, figsize=(10, 5))
+        sns.lineplot(x=range(split_index), y=self.y[:split_index], ax=axs[0], lw=0.5, color='blue', label='Train')
+        sns.lineplot(x=range(split_index, len(self.y)), y=self.y[split_index:], ax=axs[0], lw=0.5, color='green', label='Test')
+        axs[0].set_xlabel('Time')
+        sns.lineplot(x = self.x, y = self.state, label = 'state', ax=axs[1], color='red', lw=0.3)
+        axs[1].set_xlabel('Time')
         plt.suptitle(f'Simulated data with Markov Switching process in {self.model_type} parameter')
         plt.tight_layout()
 
